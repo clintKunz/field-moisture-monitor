@@ -1,0 +1,169 @@
+/*
+ * Design tokens. Every color in the app, including what the canvas draws,
+ * comes from this block, so a theme change is one edit here.
+ *
+ * Moisture colors follow ColorBrewer's brown-to-teal diverging scheme, which
+ * stays distinguishable for the common forms of color blindness: brown means
+ * dry soil, teal means wet soil.
+ */
+:root {
+  --bg: #f3f1ec;
+  --surface: #fbfaf7;
+  --ink: #1f2a24;
+  --muted: #5f6b63;
+  --line: #d8d5cc;
+  --ground: #e7e3d8;
+  --field-irrigated: #dfe6d4;
+  --field-dryland: #ece2c6;
+  --pivot-arm: #2b5f8a;
+  --alert: #b3261e;
+
+  --moisture-dry: #a6611a;
+  --moisture-low: #dfc27d;
+  --moisture-ok: #80cdc1;
+  --moisture-wet: #018571;
+  --offline: #8a8f8c;
+
+  --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151a17;
+    --surface: #1c2320;
+    --ink: #e4e8e3;
+    --muted: #9aa59e;
+    --line: #2e3833;
+    --ground: #222a26;
+    --field-irrigated: #2a3a2e;
+    --field-dryland: #3a3527;
+    --pivot-arm: #7fb6e3;
+    --alert: #ff8a80;
+    --moisture-dry: #d8913f;
+    --moisture-low: #e6cf8f;
+    --moisture-ok: #80cdc1;
+    --moisture-wet: #35b29a;
+    --offline: #6f7672;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #151a17;
+  --surface: #1c2320;
+  --ink: #e4e8e3;
+  --muted: #9aa59e;
+  --line: #2e3833;
+  --ground: #222a26;
+  --field-irrigated: #2a3a2e;
+  --field-dryland: #3a3527;
+  --pivot-arm: #7fb6e3;
+  --alert: #ff8a80;
+  --moisture-dry: #d8913f;
+  --moisture-low: #e6cf8f;
+  --moisture-ok: #80cdc1;
+  --moisture-wet: #35b29a;
+  --offline: #6f7672;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.45 var(--font-ui);
+}
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+.topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 20px;
+}
+.topbar h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.topbar .farm { color: var(--muted); }
+.clock { margin-left: auto; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--muted); }
+button:focus-visible { outline: 2px solid var(--pivot-arm); outline-offset: 2px; }
+
+.map {
+  position: relative;
+  min-height: 0;
+  background: var(--ground);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.map canvas { display: block; width: 100%; height: 100%; }
+
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+  white-space: nowrap;
+}
+.tooltip strong { display: block; font-family: var(--font-data); }
+.tooltip .muted { color: var(--muted); }
+
+.panel {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.panel h2 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.legend { display: grid; gap: 4px; }
+.legend div { display: flex; align-items: center; gap: 8px; }
+.swatch { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+
+.fields { width: 100%; border-collapse: collapse; font-size: 13px; }
+.fields th, .fields td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.fields td.num { text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.fields .crop { display: block; color: var(--muted); font-size: 12px; }
+.flag { color: var(--alert); font-weight: 600; }
+.muted { color: var(--muted); }
+
+@media (max-width: 760px) {
+  html, body { height: auto; }
+  .app { height: auto; grid-template-columns: 1fr; grid-template-rows: auto 60vh auto; }
+}

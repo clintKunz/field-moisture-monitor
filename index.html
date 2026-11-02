@@ -2,23 +2,40 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Field Moisture Monitor</title>
-    <style>
-      body { font: 14px/1.4 system-ui, sans-serif; margin: 24px; }
-      table { border-collapse: collapse; }
-      th, td { padding: 4px 12px; border-bottom: 1px solid #ddd; text-align: left; font-variant-numeric: tabular-nums; }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" />
   </head>
   <body>
-    <h1>Field Moisture Monitor</h1>
-    <p>Sim time: <strong id="clock">–</strong> · Readings received: <strong id="count">0</strong></p>
-    <table id="fields">
-      <thead>
-        <tr><th>Field</th><th>Crop</th><th>Online</th><th>Avg VWC</th><th>Range</th><th>Dry</th><th>Wet</th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div class="app">
+      <header class="topbar">
+        <h1>Field Moisture Monitor</h1>
+        <span class="farm">Snake River Plain demo farm · simulated sensors</span>
+        <span class="clock" id="clock">–</span>
+        <button id="play" type="button">Pause</button>
+      </header>
+
+      <main class="map" id="map" aria-label="Farm map with soil moisture sensors"></main>
+
+      <aside class="panel">
+        <section>
+          <h2>Soil moisture</h2>
+          <div class="legend" id="legend"></div>
+        </section>
+        <section>
+          <h2>Fields</h2>
+          <table class="fields">
+            <thead><tr><th>Field</th><th class="num">Avg</th><th class="num">Dry</th><th class="num">Wet</th></tr></thead>
+            <tbody id="field-rows"></tbody>
+          </table>
+        </section>
+        <section>
+          <h2>Selected sensor</h2>
+          <p id="selected" class="muted">Click a sensor on the map.</p>
+        </section>
+      </aside>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

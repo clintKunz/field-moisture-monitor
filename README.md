@@ -25,7 +25,11 @@ src/
   sim/                   Soil water-balance simulation that produces readings
   ingest/eventBus.ts     Typed pub/sub between producers and consumers
   store/readingStore.ts  Every reading, indexed by sensor and time
-  main.ts                Wires simulator → bus → store → UI
+  model/status.ts        Turns a reading into dry / drying / in range / saturated / offline
+  map/                   Canvas map: d3-geo projection, fields, pivot arms, sensors
+  ui/theme.ts            Reads the CSS design tokens so the canvas matches the page
+  styles.css             Design tokens (light and dark) and layout
+  main.ts                Wires simulator → bus → store → map and side panel
 ```
 
 **Simulation.** Each probe tracks the true water content of the soil around it. Every
@@ -35,6 +39,14 @@ Crops use less water as the soil dries. The probe reports that value with sensor
 
 **Ingest.** The simulator emits readings onto a typed event bus, the way a LoRa gateway
 or webhook would feed a queue. The store, alert rules and UI subscribe independently.
+
+**Map.** The farm is defined in local meters, converted to GeoJSON in longitude/latitude, and
+projected to the screen with d3-geo. Everything is drawn on a canvas, which stays fast as the
+data grows, with screen positions cached for hover and click.
+
+**Design tokens.** Every color is a CSS custom property, with light and dark sets. The canvas reads
+the same tokens, so the map always matches the page. Moisture colors use a colorblind-safe
+brown-to-teal scale, and offline sensors get a cross so status never relies on color alone.
 
 **Deterministic.** A seeded random generator makes every run identical, which keeps
 tests stable and replays repeatable.
@@ -51,7 +63,7 @@ npm run build   # type-check and production build
 ## Roadmap
 
 1. ~~Data model and simulated sensor stream~~
-2. Map rendering of fields and sensors (Canvas + d3-geo)
+2. ~~Map rendering of fields and sensors (Canvas + d3-geo)~~
 3. Interpolated moisture surface (IDW) with contour lines
 4. Alert rules for dry spots, wet spots and offline sensors
 5. Sensor history chart and a replay slider
