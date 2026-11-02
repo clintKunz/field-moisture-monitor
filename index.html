@@ -21,6 +21,25 @@
       <aside class="panel">
         <section>
           <h2>Soil moisture</h2>
+          <div class="ramp" aria-hidden="true"></div>
+          <div class="ramp-labels"><span>Dry</span><span>In range</span><span>Saturated</span></div>
+          <div class="legend">
+            <div><span class="line-key dry"></span>Dry threshold</div>
+            <div><span class="line-key mid"></span>Middle of healthy range</div>
+            <div><span class="line-key wet"></span>Wet threshold</div>
+          </div>
+          <p class="muted" style="margin: 8px 0 0; font-size: 12px">Each field is scaled to its own crop's thresholds, so potatoes and wheat share one color scale.</p>
+        </section>
+        <section>
+          <h2>Layers</h2>
+          <div class="toggles">
+            <label><input type="checkbox" id="layer-surface" checked /> Moisture surface</label>
+            <label><input type="checkbox" id="layer-contours" checked /> Contour lines</label>
+            <label><input type="checkbox" id="layer-sensors" checked /> Sensors</label>
+          </div>
+        </section>
+        <section>
+          <h2>Sensor status</h2>
           <div class="legend" id="legend"></div>
         </section>
         <section>

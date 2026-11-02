@@ -2,6 +2,7 @@ import "./styles.css";
 import { FARM_CONFIG, FIELDS } from "./config/farm";
 import { EventBus } from "./ingest/eventBus";
 import type { FarmEvents } from "./ingest/events";
+import { buildFieldSurface, type FieldSurface } from "./analysis/surface";
 import { MapView } from "./map/MapView";
 import { classify, STATUS_LABEL, type MoistureStatus } from "./model/status";
 import type { Sensor } from "./model/types";
@@ -36,6 +37,27 @@ const map = new MapView({
   sensorView,
   onSelect: (s) => renderSelected(s),
 });
+
+/**
+ * One moisture surface per field, from the sensors that are currently online.
+ * An offline sensor's last reading would be stale, so it's left out rather
+ * than painting old data as if it were current.
+ */
+function buildSurfaces(): FieldSurface[] {
+  return FIELDS.map((field) => {
+    const samples = sim.sensors
+      .filter((s) => s.fieldId === field.id)
+      .map((s) => ({ s, v: sensorView(s.id) }))
+      .filter(({ v }) => v.status !== "offline" && v.reading)
+      .map(({ s, v }) => ({ x: s.position.x, y: s.position.y, value: v.reading!.vwc }));
+    return buildFieldSurface(field, samples);
+  });
+}
+
+for (const layer of ["surface", "contours", "sensors"] as const) {
+  const box = $<HTMLInputElement>(`#layer-${layer}`);
+  box.addEventListener("change", () => map.setLayers({ [layer]: box.checked }));
+}
 
 // Legend, built from the same status list the map colors by.
 const statuses: MoistureStatus[] = ["dry", "low", "ok", "wet", "offline"];
@@ -78,7 +100,7 @@ bus.on("clock:tick", ({ t, hour }) => {
   $("#clock").textContent = new Date(t).toLocaleString("en-US", {
     timeZone: "America/Boise", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   });
-  map.update(hour);
+  map.update(hour, buildSurfaces());
   renderFieldRows();
   if (selected) renderSelected(selected);
 });

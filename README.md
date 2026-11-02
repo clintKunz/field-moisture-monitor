@@ -26,7 +26,8 @@ src/
   ingest/eventBus.ts     Typed pub/sub between producers and consumers
   store/readingStore.ts  Every reading, indexed by sensor and time
   model/status.ts        Turns a reading into dry / drying / in range / saturated / offline
-  map/                   Canvas map: d3-geo projection, fields, pivot arms, sensors
+  analysis/              IDW interpolation and contour lines (pure functions, unit tested)
+  map/                   Canvas map: d3-geo projection, fields, pivot arms, surface, sensors
   ui/theme.ts            Reads the CSS design tokens so the canvas matches the page
   styles.css             Design tokens (light and dark) and layout
   main.ts                Wires simulator → bus → store → map and side panel
@@ -43,6 +44,13 @@ or webhook would feed a queue. The store, alert rules and UI subscribe independe
 **Map.** The farm is defined in local meters, converted to GeoJSON in longitude/latitude, and
 projected to the screen with d3-geo. Everything is drawn on a canvas, which stays fast as the
 data grows, with screen positions cached for hover and click.
+
+**Moisture surface.** Each field's sensors are interpolated onto a 15 m grid with inverse distance
+weighting (closer sensors count more). Readings are first scaled to the field's own thresholds,
+0 at the dry line and 1 at the wet line, so potatoes and dryland wheat share one color scale.
+Fields are interpolated separately so irrigated and dryland readings never blend across a fence.
+d3-contour (marching squares) traces lines at the dry and wet thresholds, and offline sensors
+are left out so stale readings don't paint old data as current.
 
 **Design tokens.** Every color is a CSS custom property, with light and dark sets. The canvas reads
 the same tokens, so the map always matches the page. Moisture colors use a colorblind-safe
@@ -64,7 +72,7 @@ npm run build   # type-check and production build
 
 1. ~~Data model and simulated sensor stream~~
 2. ~~Map rendering of fields and sensors (Canvas + d3-geo)~~
-3. Interpolated moisture surface (IDW) with contour lines
+3. ~~Interpolated moisture surface (IDW) with contour lines~~
 4. Alert rules for dry spots, wet spots and offline sensors
 5. Sensor history chart and a replay slider
 6. Polish and publish
