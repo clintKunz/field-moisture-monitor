@@ -91,7 +91,7 @@ body {
   height: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
   padding-block: 12px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
@@ -146,6 +146,8 @@ button:focus-visible { outline: 2px solid var(--pivot-arm); outline-offset: 2px;
 .tooltip .muted { color: var(--muted); }
 
 .panel {
+  grid-column: 2;
+  grid-row: 2 / 4;
   min-height: 0;
   overflow: auto;
   display: flex;
@@ -174,7 +176,8 @@ button:focus-visible { outline: 2px solid var(--pivot-arm); outline-offset: 2px;
 
 @media (max-width: 760px) {
   html, body { height: auto; }
-  .app { height: auto; grid-template-columns: 1fr; grid-template-rows: auto 60vh auto; }
+  .app { height: auto; grid-template-columns: 1fr; grid-template-rows: auto 60vh auto auto; }
+  .panel { grid-column: 1; grid-row: auto; }
 }
 
 .ramp { height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--moisture-dry), var(--moisture-low) 30%, var(--moisture-ok) 55%, var(--moisture-ok) 75%, var(--moisture-wet)); }
@@ -210,3 +213,36 @@ button:focus-visible { outline: 2px solid var(--pivot-arm); outline-offset: 2px;
 .alert-item .title { font-weight: 600; min-width: 0; }
 .alert-item .detail, .alert-item .since { font-size: 12px; color: var(--muted); min-width: 0; }
 .alert-empty { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* Replay timeline */
+.timeline { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.timeline > button { min-width: 64px; }
+.timeline-track { flex: 1; min-width: 0; padding-top: 2px; }
+.speed { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.speed select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+.tl-track { position: relative; height: 26px; margin: 0 8px; }
+.tl-track input[type="range"] { position: absolute; inset: 0 -8px; width: calc(100% + 16px); margin: 0; background: transparent; accent-color: var(--pivot-arm); cursor: pointer; }
+.tl-loaded { position: absolute; left: 0; top: 11px; height: 4px; border-radius: 2px; background: var(--line); }
+.tl-marks { position: absolute; inset: 0; pointer-events: none; }
+.tl-rain { position: absolute; top: 4px; height: 18px; border-radius: 2px; background: var(--moisture-wet); opacity: 0.35; }
+.tl-alert { position: absolute; top: 0; width: 2px; height: 8px; margin-left: -1px; background: var(--alert); }
+.tl-days { position: relative; height: 16px; margin: 0 8px; font-size: 11px; color: var(--muted); }
+.tl-days span { position: absolute; transform: translateX(-50%); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Sensor history chart */
+.selected-info { margin: 0 0 6px; font-size: 13px; }
+.history-chart { width: 100%; height: auto; display: block; overflow: visible; }
+.hc-band { fill: var(--moisture-ok); opacity: 0.18; }
+.hc-rain { fill: var(--moisture-wet); opacity: 0.16; }
+.hc-grid { stroke: var(--line); stroke-width: 0.5; }
+.hc-axis { fill: var(--muted); font-size: 9px; font-family: var(--font-data); }
+.hc-dry { stroke: var(--contour-dry); stroke-width: 1; stroke-dasharray: 3 2; }
+.hc-wet { stroke: var(--contour-wet); stroke-width: 1; stroke-dasharray: 3 2; }
+.hc-line { fill: none; stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
+.hc-future { opacity: 0.25; }
+.hc-playhead { stroke: var(--pivot-arm); stroke-width: 1; }
+.hc-dot { fill: var(--pivot-arm); stroke: var(--surface); stroke-width: 1.5; }
+
+/* Keep the alert list from pushing the sensor chart off screen. */
+.alert-list { max-height: min(320px, 38vh); overflow-y: auto; padding-right: 2px; }
+@media (max-width: 760px) { .alert-list { max-height: none; } }

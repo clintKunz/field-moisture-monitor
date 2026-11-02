@@ -31,6 +31,8 @@ src/
   analysis/              IDW interpolation and contour lines (pure functions, unit tested)
   map/                   Canvas map: d3-geo projection, fields, pivot arms, surface, sensors
   ui/theme.ts            Reads the CSS design tokens so the canvas matches the page
+  ui/timeline.ts         Replay scrubber with rain bands and critical-alert marks
+  ui/historyChart.ts     Per-sensor moisture chart (hand-written SVG) with the healthy band
   styles.css             Design tokens (light and dark) and layout
   main.ts                Wires simulator → bus → store → map and side panel
 ```
@@ -63,6 +65,16 @@ probe readings jump as it passes. An alert engine subscribes to the event bus an
 a lifecycle with two kinds of hysteresis so noisy readings don't make alerts flap: a problem must
 persist for several readings to open, and a sensor must recover past a 1-point deadband to clear.
 
+**Replay.** Time has two parts: the ingest head (how far the data stream has arrived) and the
+playhead (the moment being viewed). The simulator, store and alert engine only move forward.
+The viewer can scrub anywhere; seeking past the head fast-forwards the stream. Because the alert
+engine's hysteresis depends on the order readings arrived in, it isn't re-run on scrub. Instead
+the open alerts are snapshotted after every reading and the view looks up the snapshot for its time.
+
+**Sensor history.** Selecting a sensor (or a sensor-based alert) shows its moisture over the two
+weeks against the crop's healthy band, with rain shaded. Pivot passes show as a sawtooth, and a
+pivot breakdown shows as the sawtooth stopping.
+
 **Design tokens.** Every color is a CSS custom property, with light and dark sets. The canvas reads
 the same tokens, so the map always matches the page. Moisture colors use a colorblind-safe
 brown-to-teal scale, and offline sensors get a cross so status never relies on color alone.
@@ -79,7 +91,7 @@ npm test        # unit tests
 npm run build   # type-check and production build
 ```
 
-Add `?day=10` to the URL to start the replay partway through.
+Use the timeline under the map to scrub through the two weeks, or add `?day=10` to the URL to open partway through.
 
 ## Roadmap
 
@@ -87,5 +99,5 @@ Add `?day=10` to the URL to start the replay partway through.
 2. ~~Map rendering of fields and sensors (Canvas + d3-geo)~~
 3. ~~Interpolated moisture surface (IDW) with contour lines~~
 4. ~~Alert rules for dry spots, wet spots and offline sensors~~
-5. Sensor history chart and a replay slider
+5. ~~Sensor history chart and a replay slider~~
 6. Polish and publish

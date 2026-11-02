@@ -13,16 +13,32 @@
         <h1>Field Moisture Monitor</h1>
         <span class="farm">Snake River Plain demo farm · simulated sensors</span>
         <span class="clock" id="clock">–</span>
-        <button id="play" type="button">Pause</button>
       </header>
 
       <main class="map" id="map" aria-label="Farm map with soil moisture sensors"></main>
+
+      <section class="timeline" aria-label="Replay">
+        <button id="play" type="button" aria-pressed="false">Play</button>
+        <div class="timeline-track" id="timeline-track"></div>
+        <label class="speed">Speed
+          <select id="speed">
+            <option value="1">1×</option>
+            <option value="4">4×</option>
+            <option value="16">16×</option>
+          </select>
+        </label>
+      </section>
 
       <aside class="panel">
         <section aria-live="polite">
           <h2>Alerts</h2>
           <div class="alert-summary" id="alert-summary"></div>
           <ul class="alert-list" id="alert-list"></ul>
+        </section>
+        <section>
+          <h2>Selected sensor</h2>
+          <p id="selected" class="selected-info"></p>
+          <div id="history"></div>
         </section>
         <section>
           <h2>Soil moisture</h2>
@@ -53,10 +69,6 @@
             <thead><tr><th>Field</th><th class="num">Avg</th><th class="num">Dry</th><th class="num">Wet</th></tr></thead>
             <tbody id="field-rows"></tbody>
           </table>
-        </section>
-        <section>
-          <h2>Selected sensor</h2>
-          <p id="selected" class="muted">Click a sensor on the map.</p>
         </section>
       </aside>
     </div>

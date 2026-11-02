@@ -1,5 +1,5 @@
 import "./styles.css";
-import { FARM_CONFIG, FIELDS } from "./config/farm";
+import { FARM_CONFIG, FIELDS, WEATHER } from "./config/farm";
 import { EventBus } from "./ingest/eventBus";
 import type { FarmEvents } from "./ingest/events";
 import { buildFieldSurface, type FieldSurface } from "./analysis/surface";
@@ -11,41 +11,63 @@ import { classify, STATUS_LABEL, type MoistureStatus } from "./model/status";
 import type { Sensor } from "./model/types";
 import { FarmSimulator } from "./sim/simulator";
 import { ReadingStore } from "./store/readingStore";
+import { renderHistoryChart } from "./ui/historyChart";
+import { Timeline } from "./ui/timeline";
 
 /**
- * Wiring: simulator → event bus → store → map and side panel.
- * Each piece only talks to the bus or the store, never to each other.
+ * Wiring: simulator → event bus → store and alert engine → map and side panel.
+ *
+ * Time comes in two parts:
+ *  - the ingest head: how far the data stream has arrived. The simulator,
+ *    store and alert engine only ever move forward along it.
+ *  - the playhead: the moment the viewer is looking at. It can move anywhere
+ *    the stream has reached; seeking past the head fast-forwards the stream.
  */
+const TZ = "America/Boise";
 const bus = new EventBus<FarmEvents>();
 const store = new ReadingStore();
 const sim = new FarmSimulator(FARM_CONFIG);
 const fieldById = new Map(FIELDS.map((f) => [f.id, f]));
-let now = FARM_CONFIG.start;
+const sensorById = new Map(sim.sensors.map((s) => [s.id, s]));
+const stepMs = FARM_CONFIG.intervalMin * 60_000;
+const stepTime = (step: number) => FARM_CONFIG.start + step * stepMs;
+
+let head = -1; // last step ingested
+let playhead = 0; // step being viewed
+
+function viewAt(sensorId: string, t: number) {
+  const reading = store.at(sensorId, t);
+  return { reading, status: classify(reading, t, fieldById.get(sensorById.get(sensorId)!.fieldId)!.thresholds) };
+}
+const sensorView = (sensorId: string) => viewAt(sensorId, stepTime(playhead));
+
+// ---- Ingest side: store, then alert engine, both subscribed to the reading stream.
 
 bus.on("readings:batch", ({ readings }) => store.ingest(readings));
 
 /**
- * The alert engine is just another subscriber: on each clock tick it runs the
- * rules against the store and publishes alert events back onto the bus. It
- * doesn't know the UI exists.
+ * The alert engine runs on every batch as it arrives. Its hysteresis depends
+ * on the order readings arrived in, so it can't simply be re-run when the
+ * viewer scrubs backward. Instead, the open alerts are snapshotted after
+ * every step and the viewer looks up the snapshot for the time it shows.
  */
 const engine = new AlertEngine(DEFAULT_RULES, (event, alert) => bus.emit(`alert:${event}`, alert));
-bus.on("clock:tick", ({ t }) => {
-  now = t;
-  engine.evaluate({
-    now: t,
-    fields: FIELDS,
-    sensors: sim.sensors,
-    view: sensorView,
-    history: (id) => store.history(id),
-  });
+const alertSnapshots: Alert[][] = [];
+bus.on("readings:batch", ({ t }) => {
+  engine.evaluate({ now: t, fields: FIELDS, sensors: sim.sensors, view: (id) => viewAt(id, t), history: (id) => store.history(id) });
+  alertSnapshots.push(engine.active.map((a) => ({ ...a })));
 });
 
-function sensorView(sensorId: string) {
-  const sensor = sim.sensors.find((s) => s.id === sensorId)!;
-  const reading = store.at(sensorId, now);
-  return { reading, status: classify(reading, now, fieldById.get(sensor.fieldId)!.thresholds) };
+function ingestTo(step: number) {
+  while (head < step && !sim.done) {
+    const t = sim.time;
+    bus.emit("readings:batch", { t, readings: sim.step() });
+    head++;
+  }
+  timeline.setLoaded(head);
 }
+
+// ---- View side.
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
@@ -55,14 +77,34 @@ const map = new MapView({
   sensors: sim.sensors,
   origin: FARM_CONFIG.origin,
   sensorView,
-  onSelect: (s) => renderSelected(s),
+  onSelect: (s) => {
+    selected = s;
+    renderSelected();
+  },
 });
 
-/**
- * One moisture surface per field, from the sensors that are currently online.
- * An offline sensor's last reading would be stale, so it's left out rather
- * than painting old data as if it were current.
- */
+const rain = WEATHER.flatMap((day, d) =>
+  day.rain ? [{ start: stepTime(0) + (d * 24 + day.rain.startHour) * 3_600_000, end: stepTime(0) + (d * 24 + day.rain.startHour + day.rain.hours) * 3_600_000, mm: day.rain.totalMm }] : [],
+);
+
+const timeline = new Timeline({
+  container: $("#timeline-track"),
+  start: FARM_CONFIG.start,
+  steps: sim.totalSteps,
+  stepMs,
+  timeZone: TZ,
+  rain,
+  onSeek: (step) => {
+    setPlaying(false);
+    seek(step);
+  },
+});
+
+bus.on("alert:opened", (alert) => {
+  if (alert.severity === "critical") timeline.markAlert(Math.round((alert.openedAt - FARM_CONFIG.start) / stepMs), alert.title);
+});
+
+/** One moisture surface per field, from the sensors online at the viewed time. */
 function buildSurfaces(): FieldSurface[] {
   return FIELDS.map((field) => {
     const samples = sim.sensors
@@ -79,53 +121,65 @@ for (const layer of ["surface", "contours", "sensors"] as const) {
   box.addEventListener("change", () => map.setLayers({ [layer]: box.checked }));
 }
 
-// Legend, built from the same status list the map colors by.
 const statuses: MoistureStatus[] = ["dry", "low", "ok", "wet", "offline"];
 $("#legend").innerHTML = statuses
   .map((s) => `<div><span class="swatch" style="background: var(--${s === "offline" ? "offline" : "moisture-" + s})"></span>${STATUS_LABEL[s]}</div>`)
   .join("");
 
+const timeFmt = (t: number) => new Date(t).toLocaleString("en-US", { timeZone: TZ, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+// ---- Selected sensor: details and history chart.
+
 let selected: Sensor | null = null;
-function renderSelected(sensor: Sensor | null) {
-  selected = sensor;
-  const el = $("#selected");
-  if (!sensor) {
-    el.textContent = "Click a sensor on the map.";
+function renderSelected() {
+  const info = $("#selected");
+  const chart = $("#history");
+  if (!selected) {
+    info.textContent = "Click a sensor on the map, or an alert, to see its moisture history.";
+    chart.innerHTML = "";
     return;
   }
-  const field = fieldById.get(sensor.fieldId)!;
-  const { reading, status } = sensorView(sensor.id);
-  el.innerHTML = `<strong>${sensor.id}</strong> · ${field.name}<br>
-    ${reading ? `${reading.vwc.toFixed(1)}% VWC, ${reading.soilTempC.toFixed(1)}°C, battery ${Math.round(reading.batteryPct)}%<br>` : ""}
-    ${STATUS_LABEL[status]} · healthy range ${field.thresholds.dry}–${field.thresholds.wet}%`;
-}
-
-const timeFmt = (t: number) =>
-  new Date(t).toLocaleString("en-US", { timeZone: "America/Boise", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-
-let focusedAlert: string | null = null;
-let alertsDirty = true;
-for (const event of ["alert:opened", "alert:updated", "alert:closed"] as const) {
-  bus.on(event, (alert) => {
-    alertsDirty = true;
-    if (event === "alert:closed" && alert.id === focusedAlert) focusedAlert = null;
+  const field = fieldById.get(selected.fieldId)!;
+  const { reading, status } = sensorView(selected.id);
+  info.innerHTML = `<strong>${selected.id}</strong> · ${field.name}, ${field.crop}<br>
+    ${reading ? `${reading.vwc.toFixed(1)}% VWC · ${reading.soilTempC.toFixed(1)}°C · battery ${Math.round(reading.batteryPct)}%<br>` : ""}
+    <span class="muted">${STATUS_LABEL[status]} · healthy ${field.thresholds.dry}–${field.thresholds.wet}%</span>`;
+  renderHistoryChart(chart, {
+    readings: store.history(selected.id),
+    thresholds: field.thresholds,
+    start: FARM_CONFIG.start,
+    end: stepTime(sim.totalSteps),
+    playhead: stepTime(playhead),
+    rain,
+    timeZone: TZ,
   });
 }
 
+// ---- Alerts at the viewed time.
+
+let focusedAlert: string | null = null;
+let lastAlertKey = "";
+
 function renderAlerts() {
-  const open = [...engine.active].sort(
+  const t = stepTime(playhead);
+  const open = [...(alertSnapshots[playhead] ?? [])].sort(
     (a, b) => (a.severity === b.severity ? b.openedAt - a.openedAt : a.severity === "critical" ? -1 : 1),
   );
+  if (focusedAlert && !open.some((a) => a.id === focusedAlert)) focusedAlert = null;
   map.setAlerts(open, focusedAlert);
-  if (!alertsDirty) return;
-  alertsDirty = false;
+
+  // Rebuild the list only when something visible in it changed.
+  const resolved = engine.history.filter((a) => a.closedAt! <= t).length;
+  const key = open.map((a) => a.id + a.title + a.detail + a.severity).join("|") + resolved + focusedAlert;
+  if (key === lastAlertKey) return;
+  lastAlertKey = key;
+
   const critical = open.filter((a) => a.severity === "critical").length;
   const warning = open.length - critical;
-  $("#alert-summary").innerHTML = open.length
-    ? `<span class="critical">${critical} critical</span><span class="warning">${warning} warning${warning === 1 ? "" : "s"}</span><span class="muted">${engine.history.length} resolved</span>`
-    : "";
+  $("#alert-summary").innerHTML =
+    `<span class="critical">${critical} critical</span><span class="warning">${warning} warning${warning === 1 ? "" : "s"}</span><span class="muted">${resolved} resolved</span>`;
   $("#alert-list").innerHTML = open.length
-    ? open.map((a) => alertItem(a)).join("")
+    ? open.map(alertItem).join("")
     : `<li><p class="alert-empty">No open alerts. All fields are within range.</p></li>`;
 }
 
@@ -142,7 +196,9 @@ $("#alert-list").addEventListener("click", (e) => {
   if (!button) return;
   const id = button.dataset.alert!;
   focusedAlert = focusedAlert === id ? null : id;
-  alertsDirty = true;
+  // Focusing a sensor-based alert also selects its first sensor, so its history chart shows.
+  const alert = alertSnapshots[playhead]?.find((a) => a.id === id);
+  if (focusedAlert && alert?.sensorIds[0]) map.select(sensorById.get(alert.sensorIds[0])!);
   renderAlerts();
 });
 
@@ -162,46 +218,49 @@ function renderFieldRows() {
 }
 
 bus.on("clock:tick", ({ t, hour }) => {
-  now = t;
-  $("#clock").textContent = new Date(t).toLocaleString("en-US", {
-    timeZone: "America/Boise", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
-  });
+  $("#clock").textContent = new Date(t).toLocaleString("en-US", { timeZone: TZ, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   map.update(hour, buildSurfaces());
   renderAlerts();
   renderFieldRows();
-  if (selected) renderSelected(selected);
+  renderSelected();
+  timeline.setPlayhead(playhead);
 });
 
-// Playback: one 15-minute reading interval every 60 ms (about 4 seconds per simulated day).
-let playing = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** Moves the view to a step, streaming in data up to it first if needed. */
+function seek(step: number) {
+  playhead = Math.max(0, Math.min(sim.totalSteps - 1, step));
+  ingestTo(playhead);
+  playhead = Math.min(playhead, head);
+  bus.emit("clock:tick", { t: stepTime(playhead), hour: (playhead * stepMs) / 3_600_000 });
+}
+
+// ---- Playback.
+
+let playing = false;
+let speed = 1;
+let timer: number | undefined;
 const playButton = $<HTMLButtonElement>("#play");
-playButton.addEventListener("click", () => {
-  playing = !playing;
-  if (playing && sim.done) return;
+
+function setPlaying(on: boolean) {
+  playing = on && playhead < sim.totalSteps - 1;
   playButton.textContent = playing ? "Pause" : "Play";
-  if (playing) loop();
+  playButton.setAttribute("aria-pressed", String(playing));
+  window.clearTimeout(timer);
+  if (playing) timer = window.setTimeout(tickPlayback, 60);
+}
+
+function tickPlayback() {
+  if (playhead >= sim.totalSteps - 1) return setPlaying(false);
+  seek(playhead + speed);
+  timer = window.setTimeout(tickPlayback, 60);
+}
+
+playButton.addEventListener("click", () => setPlaying(!playing));
+$<HTMLSelectElement>("#speed").addEventListener("change", (e) => {
+  speed = Number((e.target as HTMLSelectElement).value);
 });
 
-function advance() {
-  const t = sim.time;
-  const hour = sim.hour;
-  bus.emit("readings:batch", { t, readings: sim.step() });
-  bus.emit("clock:tick", { t, hour });
-}
-
-function loop() {
-  if (!playing || sim.done) {
-    playing = false;
-    playButton.textContent = sim.done ? "Done" : "Play";
-    return;
-  }
-  advance();
-  setTimeout(loop, 60);
-}
-
-// ?day=10 starts the replay partway through. Handy for demos until step 5 adds a time slider.
+// ?day=10 opens the replay partway through.
 const startDay = Number(new URLSearchParams(location.search).get("day")) || 0;
-do advance();
-while (sim.hour < startDay * 24 && !sim.done);
-playButton.textContent = playing ? "Pause" : "Play";
-if (playing) loop();
+seek(Math.round((startDay * 86_400_000) / stepMs));
+setPlaying(!window.matchMedia("(prefers-reduced-motion: reduce)").matches);
