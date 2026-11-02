@@ -3,6 +3,9 @@ import { FARM_CONFIG, FIELDS } from "./config/farm";
 import { EventBus } from "./ingest/eventBus";
 import type { FarmEvents } from "./ingest/events";
 import { buildFieldSurface, type FieldSurface } from "./analysis/surface";
+import { AlertEngine } from "./alerts/engine";
+import { DEFAULT_RULES } from "./alerts/rules";
+import type { Alert } from "./alerts/types";
 import { MapView } from "./map/MapView";
 import { classify, STATUS_LABEL, type MoistureStatus } from "./model/status";
 import type { Sensor } from "./model/types";
@@ -20,6 +23,23 @@ const fieldById = new Map(FIELDS.map((f) => [f.id, f]));
 let now = FARM_CONFIG.start;
 
 bus.on("readings:batch", ({ readings }) => store.ingest(readings));
+
+/**
+ * The alert engine is just another subscriber: on each clock tick it runs the
+ * rules against the store and publishes alert events back onto the bus. It
+ * doesn't know the UI exists.
+ */
+const engine = new AlertEngine(DEFAULT_RULES, (event, alert) => bus.emit(`alert:${event}`, alert));
+bus.on("clock:tick", ({ t }) => {
+  now = t;
+  engine.evaluate({
+    now: t,
+    fields: FIELDS,
+    sensors: sim.sensors,
+    view: sensorView,
+    history: (id) => store.history(id),
+  });
+});
 
 function sensorView(sensorId: string) {
   const sensor = sim.sensors.find((s) => s.id === sensorId)!;
@@ -80,6 +100,52 @@ function renderSelected(sensor: Sensor | null) {
     ${STATUS_LABEL[status]} · healthy range ${field.thresholds.dry}–${field.thresholds.wet}%`;
 }
 
+const timeFmt = (t: number) =>
+  new Date(t).toLocaleString("en-US", { timeZone: "America/Boise", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+let focusedAlert: string | null = null;
+let alertsDirty = true;
+for (const event of ["alert:opened", "alert:updated", "alert:closed"] as const) {
+  bus.on(event, (alert) => {
+    alertsDirty = true;
+    if (event === "alert:closed" && alert.id === focusedAlert) focusedAlert = null;
+  });
+}
+
+function renderAlerts() {
+  const open = [...engine.active].sort(
+    (a, b) => (a.severity === b.severity ? b.openedAt - a.openedAt : a.severity === "critical" ? -1 : 1),
+  );
+  map.setAlerts(open, focusedAlert);
+  if (!alertsDirty) return;
+  alertsDirty = false;
+  const critical = open.filter((a) => a.severity === "critical").length;
+  const warning = open.length - critical;
+  $("#alert-summary").innerHTML = open.length
+    ? `<span class="critical">${critical} critical</span><span class="warning">${warning} warning${warning === 1 ? "" : "s"}</span><span class="muted">${engine.history.length} resolved</span>`
+    : "";
+  $("#alert-list").innerHTML = open.length
+    ? open.map((a) => alertItem(a)).join("")
+    : `<li><p class="alert-empty">No open alerts. All fields are within range.</p></li>`;
+}
+
+function alertItem(a: Alert): string {
+  return `<li><button type="button" class="alert-item ${a.severity}" data-alert="${a.id}" aria-pressed="${a.id === focusedAlert}">
+    <span class="sev">${a.severity}</span>
+    <span class="title">${a.title}</span>
+    <span class="detail">${a.detail}</span>
+    <span class="since">Since ${timeFmt(a.openedAt)}</span></button></li>`;
+}
+
+$("#alert-list").addEventListener("click", (e) => {
+  const button = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-alert]");
+  if (!button) return;
+  const id = button.dataset.alert!;
+  focusedAlert = focusedAlert === id ? null : id;
+  alertsDirty = true;
+  renderAlerts();
+});
+
 function renderFieldRows() {
   $("#field-rows").innerHTML = FIELDS.map((field) => {
     const views = sim.sensors.filter((s) => s.fieldId === field.id).map((s) => sensorView(s.id));
@@ -101,6 +167,7 @@ bus.on("clock:tick", ({ t, hour }) => {
     timeZone: "America/Boise", weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   });
   map.update(hour, buildSurfaces());
+  renderAlerts();
   renderFieldRows();
   if (selected) renderSelected(selected);
 });
@@ -132,6 +199,9 @@ function loop() {
   setTimeout(loop, 60);
 }
 
-advance();
+// ?day=10 starts the replay partway through. Handy for demos until step 5 adds a time slider.
+const startDay = Number(new URLSearchParams(location.search).get("day")) || 0;
+do advance();
+while (sim.hour < startDay * 24 && !sim.done);
 playButton.textContent = playing ? "Pause" : "Play";
 if (playing) loop();

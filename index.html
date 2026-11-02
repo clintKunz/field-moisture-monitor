@@ -19,6 +19,11 @@
       <main class="map" id="map" aria-label="Farm map with soil moisture sensors"></main>
 
       <aside class="panel">
+        <section aria-live="polite">
+          <h2>Alerts</h2>
+          <div class="alert-summary" id="alert-summary"></div>
+          <ul class="alert-list" id="alert-list"></ul>
+        </section>
         <section>
           <h2>Soil moisture</h2>
           <div class="ramp" aria-hidden="true"></div>

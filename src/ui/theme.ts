@@ -17,6 +17,7 @@ export interface Theme {
   dryland: string;
   pivotArm: string;
   alert: string;
+  warning: string;
   contourDry: string;
   contourWet: string;
   status: Record<MoistureStatus, string>;
@@ -38,6 +39,7 @@ export function readTheme(): Theme {
     dryland: token("--field-dryland"),
     pivotArm: token("--pivot-arm"),
     alert: token("--alert"),
+    warning: token("--warning"),
     contourDry: token("--contour-dry"),
     contourWet: token("--contour-wet"),
     status: {

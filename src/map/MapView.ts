@@ -6,6 +6,7 @@ import type { Field, LonLat, Reading, Sensor } from "../model/types";
 import { STATUS_LABEL, type MoistureStatus } from "../model/status";
 import { readTheme, watchTheme, type Theme } from "../ui/theme";
 import type { FieldSurface } from "../analysis/surface";
+import type { Alert } from "../alerts/types";
 import { farmCollection, pivotArm } from "./geometry";
 import { moistureRamp, type Ramp } from "./colorRamp";
 
@@ -49,6 +50,8 @@ export class MapView {
   private theme: Theme = readTheme();
   private ramp: Ramp = moistureRamp(this.theme);
   private surfaces: FieldSurface[] = [];
+  private alerts: readonly Alert[] = [];
+  private focusedAlertId: string | null = null;
   private layers: Layers = { surface: true, contours: true, sensors: true };
   /** One small offscreen canvas per field, reused every frame to hold its raster. */
   private rasters = new Map<string, HTMLCanvasElement>();
@@ -85,6 +88,13 @@ export class MapView {
     this.surfaces = surfaces;
     this.draw();
     if (this.hovered) this.renderTooltip(this.hovered);
+  }
+
+  /** Shows open alerts as rings on the map; the focused one is drawn heavier and labeled. */
+  setAlerts(alerts: readonly Alert[], focusedId: string | null = this.focusedAlertId): void {
+    this.alerts = alerts;
+    this.focusedAlertId = focusedId;
+    this.draw();
   }
 
   setLayers(layers: Partial<Layers>): void {
@@ -175,6 +185,8 @@ export class MapView {
         ctx.fill();
       }
     }
+
+    this.drawAlerts();
 
     // Sensors, colored by moisture status. Smaller when the surface is showing, so they don't hide it.
     const r = this.layers.surface ? 4 : 5;
@@ -284,6 +296,44 @@ export class MapView {
       ctx.stroke();
       ctx.globalAlpha = 1;
       ctx.setLineDash([]);
+    }
+  }
+
+  /**
+   * Each alert as a dashed ring around the area it covers. Severity shows in
+   * line weight and dash pattern as well as color, so it reads without color.
+   */
+  private drawAlerts(): void {
+    const { ctx, theme } = this;
+    const focused = this.alerts.find((a) => a.id === this.focusedAlertId);
+    for (const alert of [...this.alerts.filter((a) => a !== focused), ...(focused ? [focused] : [])]) {
+      const c = this.projection(metersToLonLat(alert.center, this.opts.origin));
+      const edge = this.projection(metersToLonLat({ x: alert.center.x + alert.radiusM, y: alert.center.y }, this.opts.origin));
+      if (!c || !edge) continue;
+      const pad = alert.kind === "pivot-idle" ? 6 : 12;
+      const r = Math.max(10, edge[0] - c[0]) + pad;
+      const isFocused = alert === focused;
+      ctx.beginPath();
+      ctx.arc(c[0], c[1], r, 0, 2 * Math.PI);
+      ctx.strokeStyle = alert.severity === "critical" ? theme.alert : theme.warning;
+      ctx.lineWidth = isFocused ? 3.5 : alert.severity === "critical" ? 2.5 : 1.5;
+      ctx.setLineDash(alert.severity === "critical" ? [8, 4] : [3, 4]);
+      ctx.globalAlpha = this.focusedAlertId && !isFocused ? 0.45 : 1;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      if (isFocused) {
+        ctx.font = "600 12px " + getComputedStyle(document.body).fontFamily;
+        ctx.textAlign = "center";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = theme.surface;
+        ctx.lineWidth = 4;
+        const label = alert.title.split(" · ")[0]!;
+        const y = c[1] - r - 8 < 14 ? c[1] + r + 16 : c[1] - r - 8;
+        ctx.strokeText(label, c[0], y);
+        ctx.fillStyle = alert.severity === "critical" ? theme.alert : theme.ink;
+        ctx.fillText(label, c[0], y);
+      }
     }
   }
 

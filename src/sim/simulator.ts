@@ -63,11 +63,11 @@ export class FarmSimulator {
     this.totalSteps = Math.round((config.days * 24) / this.stepHours);
     this.sensors = placeSensors(config.fields, config.spacing, config.origin, rng);
 
-    const failureById = new Map<string, number>();
+    const failureById = new Map<string, FarmConfig["failures"][number]>();
     for (const f of config.failures) {
       const inField = this.sensors.filter((s) => s.fieldId === f.fieldId);
       const target = inField[f.nth % inField.length];
-      if (target) failureById.set(target.id, f.atHour);
+      if (target) failureById.set(target.id, f);
     }
 
     this.probes = this.sensors.map((sensor) => {
@@ -76,7 +76,8 @@ export class FarmSimulator {
       const available = soil.fieldCapacity - soil.wiltingPoint;
       // Irrigated fields start near field capacity; dryland starts well into the dry-down.
       const startFraction = field.kind === "irrigated" ? 0.85 + rng() * 0.1 : 0.4 + rng() * 0.15;
-      const failsAtHour = failureById.get(sensor.id) ?? null;
+      const failure = failureById.get(sensor.id);
+      const failsAtHour = failure?.atHour ?? null;
       const battery = 70 + rng() * 30;
       return {
         sensor,
@@ -86,8 +87,8 @@ export class FarmSimulator {
         bearingFromPivot: field.shape === "circle" ? bearingDeg(field.center, sensor.position) : null,
         leakMmPerHour: leakAt(sensor, config.leaks),
         battery,
-        // A sensor with a dying battery runs down to zero by its failure hour.
-        batteryDrainPerHour: failsAtHour !== null ? battery / failsAtHour : 0.01 + rng() * 0.02,
+        // A sensor with a dying battery runs down to zero by its failure hour; a radio failure doesn't touch the battery.
+        batteryDrainPerHour: failure?.reason === "battery" ? battery / failure.atHour : 0.01 + rng() * 0.02,
         failsAtHour,
       };
     });

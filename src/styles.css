@@ -17,6 +17,7 @@
   --field-dryland: #ece2c6;
   --pivot-arm: #2b5f8a;
   --alert: #b3261e;
+  --warning: #a86b00;
   --contour-dry: #6b3a0a;
   --contour-wet: #00574a;
 
@@ -43,6 +44,7 @@
     --field-dryland: #3a3527;
     --pivot-arm: #7fb6e3;
     --alert: #ff8a80;
+    --warning: #f2c14e;
     --contour-dry: #f2b56b;
     --contour-wet: #8fe6d2;
     --moisture-dry: #d8913f;
@@ -65,6 +67,7 @@
   --field-dryland: #3a3527;
   --pivot-arm: #7fb6e3;
   --alert: #ff8a80;
+  --warning: #f2c14e;
   --contour-dry: #f2b56b;
   --contour-wet: #8fe6d2;
   --moisture-dry: #d8913f;
@@ -183,3 +186,27 @@ button:focus-visible { outline: 2px solid var(--pivot-arm); outline-offset: 2px;
 .toggles { display: grid; gap: 4px; }
 .toggles label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .toggles input { accent-color: var(--pivot-arm); margin: 0; }
+
+.alert-summary { display: flex; gap: 12px; font-size: 13px; margin-bottom: 6px; }
+.alert-summary .critical { color: var(--alert); font-weight: 600; }
+.alert-summary .warning { color: var(--warning); font-weight: 600; }
+.alert-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.alert-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--warning);
+  background: var(--surface);
+}
+.alert-item.critical { border-left-color: var(--alert); }
+.alert-item[aria-pressed="true"] { border-color: var(--pivot-arm); border-left-width: 4px; box-shadow: 0 0 0 1px var(--pivot-arm); }
+.alert-item .sev { grid-row: span 3; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--warning); padding-top: 2px; }
+.alert-item.critical .sev { color: var(--alert); }
+.alert-item .title { font-weight: 600; min-width: 0; }
+.alert-item .detail, .alert-item .since { font-size: 12px; color: var(--muted); min-width: 0; }
+.alert-empty { font-size: 13px; color: var(--muted); margin: 0; }

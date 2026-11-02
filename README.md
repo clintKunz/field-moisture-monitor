@@ -26,6 +26,8 @@ src/
   ingest/eventBus.ts     Typed pub/sub between producers and consumers
   store/readingStore.ts  Every reading, indexed by sensor and time
   model/status.ts        Turns a reading into dry / drying / in range / saturated / offline
+  alerts/                Alert rules, spot clustering and the alert engine
+  config/alerts.ts       Alert tuning as data: deadband, debounce, leak and pivot timing
   analysis/              IDW interpolation and contour lines (pure functions, unit tested)
   map/                   Canvas map: d3-geo projection, fields, pivot arms, surface, sensors
   ui/theme.ts            Reads the CSS design tokens so the canvas matches the page
@@ -52,6 +54,15 @@ Fields are interpolated separately so irrigated and dryland readings never blend
 d3-contour (marching squares) traces lines at the dry and wet thresholds, and offline sensors
 are left out so stale readings don't paint old data as current.
 
+**Alerts.** Rules are plain functions that read the current state and return findings: dry
+spots, wet spots (a spot saturated for 6+ hours is flagged as a possible leak), offline sensors,
+and pivots that have stopped watering. Dry and wet sensors are grouped into named spots
+("Dry spot · Pivot 2 east") with union-find clustering. The pivot rule doesn't read the
+simulator's breakdown schedule; it infers a stall from the data, since a working pivot makes
+probe readings jump as it passes. An alert engine subscribes to the event bus and gives findings
+a lifecycle with two kinds of hysteresis so noisy readings don't make alerts flap: a problem must
+persist for several readings to open, and a sensor must recover past a 1-point deadband to clear.
+
 **Design tokens.** Every color is a CSS custom property, with light and dark sets. The canvas reads
 the same tokens, so the map always matches the page. Moisture colors use a colorblind-safe
 brown-to-teal scale, and offline sensors get a cross so status never relies on color alone.
@@ -68,11 +79,13 @@ npm test        # unit tests
 npm run build   # type-check and production build
 ```
 
+Add `?day=10` to the URL to start the replay partway through.
+
 ## Roadmap
 
 1. ~~Data model and simulated sensor stream~~
 2. ~~Map rendering of fields and sensors (Canvas + d3-geo)~~
 3. ~~Interpolated moisture surface (IDW) with contour lines~~
-4. Alert rules for dry spots, wet spots and offline sensors
+4. ~~Alert rules for dry spots, wet spots and offline sensors~~
 5. Sensor history chart and a replay slider
 6. Polish and publish
