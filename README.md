@@ -4,8 +4,17 @@ A TypeScript dashboard for a network of soil-moisture sensors on a farm with bot
 center-pivot irrigated fields and dryland fields. It shows where fields are too wet
 or too dry so a grower knows where to water, and where something has gone wrong.
 
-The farm and its sensors are simulated: about 160 probes report every 15 minutes over
-two weeks in July on the Snake River Plain in eastern Idaho.
+**[Live demo →](https://clintkunz.github.io/field-moisture-monitor/)**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
+  <img alt="Farm map with an interpolated soil-moisture surface, contour lines and alert rings; an alert list and a sensor's moisture history chart on the right; a replay timeline below." src="docs/screenshot-light.png">
+</picture>
+
+The farm and its sensors are simulated: 159 probes report every 15 minutes over
+two weeks in July on the Snake River Plain in eastern Idaho. No backend, no map
+tiles and no charting library: the map, surface, contours and chart are drawn
+directly with Canvas, SVG and d3-geo.
 
 ## What happens in the two weeks
 
@@ -93,11 +102,20 @@ npm run build   # type-check and production build
 
 Use the timeline under the map to scrub through the two weeks, or add `?day=10` to the URL to open partway through.
 
-## Roadmap
+Every push to `main` runs the tests, builds, and deploys to GitHub Pages (`.github/workflows/deploy.yml`).
 
-1. ~~Data model and simulated sensor stream~~
-2. ~~Map rendering of fields and sensors (Canvas + d3-geo)~~
-3. ~~Interpolated moisture surface (IDW) with contour lines~~
-4. ~~Alert rules for dry spots, wet spots and offline sensors~~
-5. ~~Sensor history chart and a replay slider~~
-6. Polish and publish
+## Trade-offs and what I'd do next
+
+- **Interpolation.** IDW is fast and never invents values outside the measured range, but it
+  makes "bullseyes" around isolated sensors (visible on the South Bench). Kriging would model
+  how moisture correlates with distance and give an uncertainty map, at much higher cost.
+- **Scale.** Clustering compares every pair of sensors and IDW visits every sensor for every
+  grid cell. Both are fine for ~30 sensors a field. For thousands I'd add a spatial index
+  (k-d tree) and only use the nearest k sensors per cell.
+- **Main thread.** Interpolation runs on the main thread, taking a few milliseconds a tick. A
+  larger farm would move it to a Web Worker and transfer the grids back.
+- **Real data.** The simulator sits behind the event bus, so a real feed (a LoRaWAN network
+  server pushing over a WebSocket or webhook) would replace it without touching the store,
+  alerts or UI.
+- **Canvas accessibility.** The canvas map isn't keyboard-navigable; the alert list, replay
+  controls and chart are. A real product would add a keyboard path to sensors on the map.
