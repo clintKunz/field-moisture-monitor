@@ -41,7 +41,8 @@ export class Timeline {
     o.container.querySelector(".tl-days")!.innerHTML = Array.from({ length: days }, (_, d) => {
       const t = o.start + d * 86_400_000;
       const label = new Date(t).toLocaleDateString("en-US", { timeZone: o.timeZone, month: "short", day: "numeric" });
-      return `<span style="left:${pct(t)}">${d % 2 === 0 ? label : ""}</span>`;
+      // Every other day on wide screens; the CSS hides every second one again on phones.
+      return d % 2 === 0 ? `<span class="${d % 4 === 0 ? "" : "tl-minor"}" style="left:${pct(t)}">${label}</span>` : "";
     }).join("");
 
     this.input.addEventListener("input", () => o.onSeek(Number(this.input.value)));

@@ -246,3 +246,12 @@ button:focus-visible { outline: 2px solid var(--pivot-arm); outline-offset: 2px;
 /* Keep the alert list from pushing the sensor chart off screen. */
 .alert-list { max-height: min(320px, 38vh); overflow-y: auto; padding-right: 2px; }
 @media (max-width: 760px) { .alert-list { max-height: none; } }
+
+@media (max-width: 760px) {
+  .app { grid-template-rows: auto auto auto auto; }
+  .map { aspect-ratio: 1 / 1; height: auto; }
+  .timeline { flex-wrap: wrap; }
+  .timeline-track { order: 3; flex-basis: 100%; }
+  .speed { margin-left: auto; }
+  .tl-minor { display: none; }
+}
